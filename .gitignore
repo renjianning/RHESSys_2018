@@ -15,7 +15,10 @@ build/Qt/gcc/bin/
 build/Qt/gcc/RHESSys/RHESSys.pro.user
 build/Qt/gcc/RHESSys/RHESSys.pro.user.2.7pre1
 
-
+rhessys/cycle/.*.swp
+rhessys/hydro/.*.swp
+rhessys/tec/.*.swp
+.*.swp
 
 
 
