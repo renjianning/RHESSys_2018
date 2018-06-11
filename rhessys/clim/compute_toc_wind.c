@@ -47,6 +47,7 @@ double	compute_toc_wind(
 						 int	verbose_flag,
 						 double	u_h,
 						 double	h,
+						 double canht,
 						 double	z)
 {
 	/*--------------------------------------------------------------*/
@@ -61,9 +62,9 @@ double	compute_toc_wind(
 	/*--------------------------------------------------------------*/
 	/*	compute winds.						*/
 	/*--------------------------------------------------------------*/
-	if (z > 0.0) {
-		d_o = 0.7 * z;
-		z_o = 0.1 * z;
+	if (canht > 0.0) {
+		d_o = 0.63 * canht;
+		z_o = 0.1 * canht;
 	}
 	else {
 		d_o = 0.0;
@@ -79,6 +80,5 @@ double	compute_toc_wind(
 		exit(EXIT_FAILURE);
 	}
 	u_z  = u_h * log((z-d_o)/z_o) / log((h-d_o)/z_o);
-
 	return(u_z);
 } /*compute_toc_wind*/
