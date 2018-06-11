@@ -651,19 +651,6 @@ typedef struct base_station_ncheader_object
         char    netcdf_tmin_varname[MAXSTR];    /* variable name for tmin in nc file */
         char    netcdf_rain_varname[MAXSTR];    /* variable name for rain in nc file */
         char    netcdf_elev_varname[MAXSTR];    /* variable name for elev in nc file */
-#ifdef LIU_EXTEND_CLIM_VAR
-        double  rhum_mult;                    /* multiplier for relative humidity to 0-1 */
-        char    netcdf_huss_filename[MAXSTR];   /* filename for specific humidity nc file */
-        char    netcdf_huss_varname[MAXSTR];    /* variable name for specific humidity in nc file */
-        char    netcdf_rmax_filename[MAXSTR];   /* filename for relative humidity max nc file */
-        char    netcdf_rmax_varname[MAXSTR];    /* variable name for relative humidity max in nc file */
-        char    netcdf_rmin_filename[MAXSTR];   /* filename for relative humidity min nc file */
-        char    netcdf_rmin_varname[MAXSTR];    /* variable name for relative humidity min in nc file */
-        char    netcdf_rsds_filename[MAXSTR];   /* filename for shortwave radiation nc file */
-        char    netcdf_rsds_varname[MAXSTR];    /* variable name for shortwave radiation in nc file */
-        char    netcdf_was_filename[MAXSTR];   /* filename for wind speed nc file */
-        char    netcdf_was_varname[MAXSTR];    /* variable name for wind speed in nc file */
-#endif
 } base_station_ncheader_object;
 /*----------------------------------------------------------*/
 /*      Define dated climate sequence                       */
@@ -706,7 +693,6 @@ struct  dated_input_object
         struct clim_event_sequence  irrigation;                                 /* m/day        */
         struct clim_event_sequence  snow_melt_input;                                 /* m/day        */
         struct clim_event_sequence  biomass_removal_percent;                           /* 0-1        */
-        struct clim_event_sequence  pspread;   	 	   	                    /* 0-1        */
         struct clim_event_sequence  PH;                                 /* DIM  */
         struct clim_event_sequence  grazing_Closs;                                      /* kg/m2/day    */
         };
@@ -769,12 +755,6 @@ struct  daily_clim_object
         double  *vpd;                           /*      Pa              */
         double  *wind;                          /*      m/s             */
         double  *wind_direction;                /*      degrees         */
-#ifdef LIU_EXTEND_CLIM_VAR
-        double  *relative_humidity_max;         /*      0 - 1                 */
-        double  *relative_humidity_min;         /*      0 - 1                 */
-        double  *surface_shortwave_rad;         /*      W m-2  daily average  */
-        double  *specific_humidity;             /*      kg/kg  daily average  */
-#endif
         };    
         
 
@@ -1153,8 +1133,6 @@ struct	soil_default
 	double  gsurf_intercept;				/* m/s */
 	double  theta_mean_std_p1;				/* DIM */
 	double  theta_mean_std_p2;				/* DIM */
-	double  overstory_height_thresh;        /* Defines lower limit of overstory (m) */
-	double  understory_height_thresh;       /* Defines upper limit of understory (m) */
 	struct soil_class	soil_type;
 	};
 
@@ -1267,15 +1245,6 @@ struct  cdayflux_patch_struct
     double m_gresp_store_to_litr1c;      /* (kgC/m2/d) */
     double m_gresp_transfer_to_litr1c;     /* (kgC/m2/d) */
 
-    /* fire fluxes */
-    double m_litr1c_to_atmos;       /* (kgC/m2) labile to atmosphere */
-    double m_litr2c_to_atmos;       /* (kgC/m2) unshielded cellulose to atmosphere */
-    double m_litr3c_to_atmos;       /* (kgC/m2) shielded cellulose to atmosphere */
-    double m_litr4c_to_atmos;       /* (kgC/m2) lignin to atmosphere */
-    double m_soil1c_to_atmos;       /* (kgC/m2) microbial recycling pool to atmosphere */
-    double m_soil2c_to_atmos;       /* (kgC/m2) microbial recycling pool to atmosphere */
-    double m_soil3c_to_atmos;       /* (kgC/m2) microbial recycling pool to atmosphere */
-    double m_soil4c_to_atmos;       /* (kgC/m2) microbial recycling pool to atmosphere */
 
         };
 
@@ -1385,17 +1354,6 @@ struct  ndayflux_patch_struct
     double ndep_to_sminn;    /* (kgN/m2/d) deposition to soil min N pool */
     double nfix_to_sminn;             /* (kgN/m2/d) biological n fixation */
     double N_to_gw;        /* (kgN/m2/day) loss due to leaching to gw */
-
-    /* fire fluxes */
-    double m_litr1n_to_atmos;       /* (kgN/m2) labile to atmosphere */
-    double m_litr2n_to_atmos;       /* (kgN/m2) unshielded cellulose to atmosphere */
-    double m_litr3n_to_atmos;       /* (kgN/m2) shielded cellulose to atmosphere */
-    double m_litr4n_to_atmos;       /* (kgN/m2) lignin to atmosphere */
-    double m_soil1n_to_atmos;       /* (kgN/m2) microbial recycling pool to atmosphere */
-    double m_soil2n_to_atmos;       /* (kgN/m2) microbial recycling pool to atmosphere */
-    double m_soil3n_to_atmos;       /* (kgN/m2) microbial recycling pool to atmosphere */
-    double m_soil4n_to_atmos;       /* (kgN/m2) microbial recycling pool to atmosphere */
-
         };
 /*----------------------------------------------------------*/
 /*      Define a litter objects                             */
@@ -1509,35 +1467,8 @@ struct patch_fire_water_object
 {
         double pet;                     /* mm */
         double et;                      /* mm */
-	double understory_et; /*mm; understory layer et*/
-	double understory_pet; /*mm; understory layer pet*/
 
 };
-
-
-/*----------------------------------------------------------*/
-/*      Define the fire litter soil loss structure.        */
-/*----------------------------------------------------------*/
-struct fire_litter_soil_loss_struct
-{
-        double loss_litr1c;
-        double loss_litr2c;
-        double loss_litr3c;
-        double loss_litr4c;
-	double loss_soil1c;
-	double loss_soil2c;
-	double loss_soil3c;
-	double loss_soil4c;
-        double loss_litr1n;
-        double loss_litr2n;
-        double loss_litr3n;
-        double loss_litr4n;
-	double loss_soil1n;
-	double loss_soil2n;
-	double loss_soil3n;
-	double loss_soil4n;
-};
-
 
 /*----------------------------------------------------------*/
 /*      Define the spinup structure.                        */
@@ -2686,11 +2617,7 @@ struct  stratum_default
         double  ustar_overu;                    /* DIM  */
         struct  epconst_struct  epc;
         struct  mrconst_struct  mrc;
-	double pspread_loss_rel; 		/* Relation between probability of spread and percent carbon loss */
-	double vapor_loss_rel; 			/* Relation between percent carbon loss and percent carbon vaporized */
-	double biomass_loss_rel_k1; 		/* k1 for the biomass sigmoid function (steepness of curve) */
-	double biomass_loss_rel_k2; 		/* k2 for the biomass sigmoid function (centerpoint of curve) */
-};
+        };
 
 /*----------------------------------------------------------*/
 /*      Define target object                                */
@@ -2698,8 +2625,6 @@ struct  stratum_default
        struct target_object { 
               double lai;
               double total_stemc;
-              double height;
-              double age;
               int    met;
        };
 /*----------------------------------------------------------*/

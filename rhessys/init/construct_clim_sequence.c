@@ -66,9 +66,6 @@ double *construct_clim_sequence(char *file, struct date start_date,
 	/*	local variable declarations 								*/
 	/*--------------------------------------------------------------*/
 	int	target_fnd;
-	int 	remaining, segs;
-	int	avail_length, needed_length;
-	long	s,l;
 	long	i,j;
 	long	first_date_julian;
 	long	start_date_julian;
@@ -149,23 +146,8 @@ double *construct_clim_sequence(char *file, struct date start_date,
 					&& (curr_date.day == target_date.day)) target_fnd=1;
 				j = j+1;
 			}
-			if (j < i) {
-				avail_length = i-j;
-				needed_length = duration - i;
-				segs = floor(needed_length/avail_length);
-				for (s = 0; s < segs; s++) {
-					for (l = 0; l<avail_length; l++) {
-						*(sequence+i) = *(sequence+j+l);
-						i = i + 1;
-					}
-				}
-
-				remaining = needed_length-segs*avail_length;
-				for (l=0; l < remaining; l++) {
-						*(sequence+i) = *(sequence+j+l);
-						i = i + 1;
-				}
-			}
+			if (j < i)
+				*(sequence+i) = *(sequence+j);
 			else {
 				fprintf(stderr,"FATAL ERROR: in construct_clim_sequence\n");
 				fprintf(stderr,"\n not enough data in base climate to repeat\n");
