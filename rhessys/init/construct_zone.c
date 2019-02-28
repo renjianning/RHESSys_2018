@@ -50,6 +50,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include "rhessys.h"
+#include "params.h"
 
 struct zone_object *construct_zone(
 								   struct	command_line_object	*command_line,
@@ -88,6 +89,8 @@ struct zone_object *construct_zone(
 		FILE	*,
 		int		num_world_base_stations,
 		struct base_station_object **world_base_stations,
+		int     num_world_extra_base_stations,
+		struct base_station_object  **extra_base_stations,  //NREN 20180711
 		struct	default_object	*defaults);
 	
 	struct base_station_object *construct_netcdf_grid(
@@ -114,12 +117,13 @@ struct zone_object *construct_zone(
 	/*--------------------------------------------------------------*/
 	int		base_stationID;
 	int		i, k, j;
-	int		default_object_ID;
 	int		notfound;
     int     basestation_id;
 	float   base_x, base_y;	
 	char	record[MAXSTR];
 	struct	zone_object *zone;
+	int paramCnt=0;
+	param *paramPtr=NULL;
 	
 	notfound = 0;
 	base_x = 0.0;
@@ -136,31 +140,21 @@ struct zone_object *construct_zone(
 	/*--------------------------------------------------------------*/
 	/*	Read in the next zone record for this hillslope.			*/
 	/*--------------------------------------------------------------*/
-	fscanf(world_file,"%d",&(zone[0].ID));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(zone[0].x));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(zone[0].y));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(zone[0].z));
-	read_record(world_file, record);
-	fscanf(world_file,"%d",&(default_object_ID));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(zone[0].area));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(zone[0].slope));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(zone[0].aspect));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(zone[0].precip_lapse_rate));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(zone[0].e_horizon));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(zone[0].w_horizon));
-	read_record(world_file, record);
-	fscanf(world_file,"%d",&(zone[0].num_base_stations));
-	read_record(world_file, record);
 
+	paramPtr=readtag_worldfile(&paramCnt,world_file,"Zone");
+
+	zone[0].ID = getIntWorldfile(&paramCnt,&paramPtr,"zone_ID","%d",-9999,0);
+	zone[0].x = getDoubleWorldfile(&paramCnt,&paramPtr,"x","%lf",0,1);
+	zone[0].y = getDoubleWorldfile(&paramCnt,&paramPtr,"y","%lf",0,1);
+	zone[0].z = getDoubleWorldfile(&paramCnt,&paramPtr,"z","%lf",-9999,0);
+	zone[0].zone_parm_ID = getIntWorldfile(&paramCnt,&paramPtr,"zone_parm_ID","%d",-9999,0);
+	zone[0].area = getDoubleWorldfile(&paramCnt,&paramPtr,"area","%lf",-9999,0);
+	zone[0].slope = getDoubleWorldfile(&paramCnt,&paramPtr,"slope","%lf",-9999,0);
+	zone[0].aspect = getDoubleWorldfile(&paramCnt,&paramPtr,"aspect","%lf",-9999,0);
+	zone[0].precip_lapse_rate = getDoubleWorldfile(&paramCnt,&paramPtr,"precip_lapse_rate","%lf",1.0,1);
+	zone[0].e_horizon = getDoubleWorldfile(&paramCnt,&paramPtr,"e_horizon","%lf",-9999,0);
+	zone[0].w_horizon = getDoubleWorldfile(&paramCnt,&paramPtr,"w_horizon","%lf",-9999,0);
+	zone[0].num_base_stations = getIntWorldfile(&paramCnt,&paramPtr,"n_basestations","%d",0,0);	
 	/*--------------------------------------------------------------*/
 	/*	convert from degrees to radians for slope and aspects 	*/
 	/*--------------------------------------------------------------*/
@@ -195,7 +189,7 @@ struct zone_object *construct_zone(
 		alloc( sizeof(struct zone_default *),"defaults",
 		"construct_zone" );
 	i = 0;
-	while (defaults[0].zone[i].ID != default_object_ID) {
+	while (defaults[0].zone[i].ID != zone[0].zone_parm_ID) {
 		i++;
 		/*--------------------------------------------------------------*/
 		/*  Report an error if no match was found.  Otherwise assign    */
@@ -204,7 +198,7 @@ struct zone_object *construct_zone(
 		if ( i>= defaults[0].num_zone_default_files ){
 			fprintf(stderr,
 				"\nFATAL ERROR: in construct_zone, zone default ID %d not found.\n",
-				default_object_ID);
+				zone[0].zone_parm_ID);
 			exit(EXIT_FAILURE);
 		}
 	} /* end-while */
@@ -310,7 +304,7 @@ struct zone_object *construct_zone(
 #ifdef LIU_NETCDF_READER
 
       if (notfound) {
-       fprintf(stderr,"can't locate station data in netcdf!!!\n");
+       fprintf(stderr,"can't locate station data for ID:%d in netcdf!!!\n", basestation_id);
        exit(0);
       }
 #else
@@ -387,15 +381,37 @@ struct zone_object *construct_zone(
 	/*--------------------------------------------------------------*/
 	/*	Construct the intervals in this zone.						*/
 	/*--------------------------------------------------------------*/
+	if (command_line[0].gridded_netcdf_flag==1 && world[0].num_extra_stations==1)
+	{
 	for ( i=0 ; i<zone[0].num_patches ; i++ ){
 		zone[0].patches[i] = construct_patch(
 			command_line,
 			world_file,
 			*num_world_base_stations,
 			world_base_stations,
+			world[0].num_extra_stations,
+			(world[0].extra_stations),
+			defaults);
+		zone[0].patches[i][0].zone = zone;
+            }
+	}
+
+	else
+	{
+	for ( i=0 ; i<zone[0].num_patches ; i++ ){
+		zone[0].patches[i] = construct_patch(
+			command_line,
+			world_file,
+			*num_world_base_stations,
+			world_base_stations,
+			0,
+			world_base_stations,
 			defaults);
 		zone[0].patches[i][0].zone = zone;
 	} /*end for*/
+
+	} // end else
+	  free(paramPtr);
 
 	
 	return(zone);

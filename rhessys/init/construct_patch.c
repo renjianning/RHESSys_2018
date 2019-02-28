@@ -41,12 +41,15 @@
 #include <stdlib.h>
 #include "rhessys.h"
 #include "phys_constants.h"
-
+#include "params.h"
 struct patch_object *construct_patch(
 									 struct	command_line_object	*command_line,
 									 FILE	*world_file,
 									 int     num_world_base_stations,
 									 struct  base_station_object **world_base_stations,
+                                    /* read extra base station information if using netcdf NREN 20180711 */
+                                     int    num_world_extra_base_stations,
+                                     struct base_station_object **extra_base_stations,
 									 struct	default_object	*defaults)
 {
 	/*--------------------------------------------------------------*/
@@ -56,14 +59,15 @@ struct patch_object *construct_patch(
 		int ,
 		int ,
 		struct base_station_object **);
-	struct 	canopy_strata_object *construct_canopy_strata( 
+	struct 	canopy_strata_object *construct_canopy_strata(
 		struct command_line_object *,
 		FILE	*,
 		struct	patch_object *,
 		int     num_world_base_stations,
+		int     num_world_extra_base_stations,
 		struct  base_station_object **world_base_stations,
 		struct	default_object	*defaults);
-	  struct 	canopy_strata_object *construct_empty_shadow_strata( 
+	  struct 	canopy_strata_object *construct_empty_shadow_strata(
 		struct command_line_object *,
 		struct	patch_object *,
 		struct  canopy_strata_object *stratum,
@@ -75,28 +79,26 @@ struct patch_object *construct_patch(
 		double,
 		double);
 	void	update_litter_interception_capacity (
-		double, 
-		double, 
+		double,
+		double,
 		struct litter_c_object *,
 		struct litter_object *);
-	
+
 	void	sort_patch_layers(struct patch_object *);
 	void	*alloc(	size_t, char *, char *);
-	
+
 	/*--------------------------------------------------------------*/
 	/*	Local variable definitions				*/
 	/*--------------------------------------------------------------*/
 	int		base_stationID;
-	int		i;
-	int		soil_default_object_ID;
-	int		landuse_default_object_ID;
-	int		fire_default_object_ID;
+	int		i, beetle_defaults_object_ID ; //NREN 20190218
+	int		fire_parm_ID;
 	int  beetle_default_object_ID;
 	int		surface_energy_default_object_ID;
 	char		record[MAXSTR];
 	struct patch_object *patch;
-	double	mpar;
-	
+	int paramCnt=0;
+	param * paramPtr=NULL;
 	/*--------------------------------------------------------------*/
 	/*  Allocate a patch object.                                */
 	/*--------------------------------------------------------------*/
@@ -109,45 +111,42 @@ struct patch_object *construct_patch(
  	if ( (command_line[0].vegspinup_flag > 0) ) {
    patch[0].shadow_litter_cs = (struct litter_c_object *) alloc( 1 *
       sizeof( struct litter_c_object ),"shadow_litter_cs", "construct_patch" );
-        
+
    patch[0].shadow_litter_ns = (struct litter_n_object *) alloc( 1 *
       sizeof( struct litter_n_object ),"shadow_litter_ns", "construct_patch" );
-    
+
    patch[0].shadow_soil_cs = (struct soil_c_object *) alloc( 1 *
       sizeof( struct soil_c_object ),"shadow_soil_cs", "construct_patch" );
-        
+
    patch[0].shadow_soil_ns = (struct soil_n_object *) alloc( 1 *
       sizeof( struct soil_n_object ),"shadow_soil_ns", "construct_patch" );
   }
-	
+
 	/*--------------------------------------------------------------*/
 	/*	Read in the next patch record for this hillslope.			*/
 	/*--------------------------------------------------------------*/
-	fscanf(world_file,"%d",&(patch[0].ID));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].x));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].y));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].z));
-	read_record(world_file, record);
-	fscanf(world_file,"%d",&(soil_default_object_ID));
-	read_record(world_file, record);
-	fscanf(world_file,"%d",&(landuse_default_object_ID));
-	read_record(world_file, record);
+
+	paramPtr = readtag_worldfile(&paramCnt,world_file,"Patch");
+
+	patch[0].ID = getIntWorldfile(&paramCnt,&paramPtr,"patch_ID","%d",-9999,0);
+	patch[0].x = getDoubleWorldfile(&paramCnt,&paramPtr,"x","%lf",0.0,1);
+	patch[0].y = getDoubleWorldfile(&paramCnt,&paramPtr,"y","%lf",0.0,1);
+	patch[0].z = getDoubleWorldfile(&paramCnt,&paramPtr,"z","%lf",0.0,1);
+	patch[0].soil_parm_ID = getIntWorldfile(&paramCnt,&paramPtr,"soil_parm_ID","%d",-9999,0);
+	patch[0].landuse_parm_ID = getIntWorldfile(&paramCnt,&paramPtr,"landuse_parm_ID","%d",-9999,0);
 
 	if (command_line[0].firespread_flag == 1) {
-		fscanf(world_file,"%d",&(fire_default_object_ID));
-		read_record(world_file, record);
+		//fscanf(world_file,"%d",&(fire_parm_ID));
+		//read_record(world_file, record);//NREn 20190224
+		fire_parm_ID = getIntWorldfile(&paramCnt,&paramPtr,"fire_parm_ID","%d",-9999,0);
 		}
 
 /* read the input from worldfile if the beetlespread_flag is set */
     if (command_line[0].beetlespread_flag == 1) {
-		fscanf(world_file,"%d",&(beetle_default_object_ID));
-		read_record(world_file, record);
+		//fscanf(world_file,"%d",&(beetle_default_object_ID));
+		//read_record(world_file, record); //NREN 2019218
+		beetle_defaults_object_ID = getIntWorldfile(&paramCnt,&paramPtr,"beetle_parm_ID","%d",-9999,0);
 		}
-
-
 
 
 	if (command_line[0].surface_energy_flag == 1) {
@@ -155,44 +154,65 @@ struct patch_object *construct_patch(
 		read_record(world_file, record);
 		}
 
-	fscanf(world_file,"%lf",&(patch[0].area));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].slope));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].lna));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].Ksat_vertical));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(mpar));
-	read_record(world_file, record);
+	patch[0].area = getDoubleWorldfile(&paramCnt,&paramPtr,"area","%lf",-9999,0);
+	patch[0].slope = getDoubleWorldfile(&paramCnt,&paramPtr,"slope","%lf",-9999,0);
+	patch[0].lna  = getDoubleWorldfile(&paramCnt,&paramPtr,"lna","%lf",7,1);
+	patch[0].Ksat_vertical = getDoubleWorldfile(&paramCnt,&paramPtr,"Ksat_vertical","%lf",1.0,1);
+	patch[0].mpar = getDoubleWorldfile(&paramCnt,&paramPtr,"mpar","%lf",0,1);
+
+
 	if (command_line[0].stdev_flag == 1) {
-		fscanf(world_file,"%lf",&(patch[0].std));
-		read_record(world_file, record);
+		patch[0].std = getDoubleWorldfile(&paramCnt,&paramPtr,"std","%lf",-9999,0);
 		patch[0].std = patch[0].std*command_line[0].std_scale;
 		}
 	else patch[0].std = 0.0;
-	fscanf(world_file,"%lf",&(patch[0].rz_storage));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].unsat_storage));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].sat_deficit));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].snowpack.water_equivalent_depth));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].snowpack.water_depth));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].snowpack.T));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].snowpack.surface_age));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].snowpack.energy_deficit));
-	read_record(world_file, record);
+	patch[0].rz_storage = getDoubleWorldfile(&paramCnt,&paramPtr,"rz_storage","%lf",0,1);
+	patch[0].unsat_storage = getDoubleWorldfile(&paramCnt,&paramPtr,"unsat_storage","%lf",0,1);
+	patch[0].sat_deficit = getDoubleWorldfile(&paramCnt,&paramPtr,"sat_deficit","%lf",1,1);
+	patch[0].snowpack.water_equivalent_depth =
+			      getDoubleWorldfile(&paramCnt,&paramPtr,"snowpack.water_equivalent_depth","%lf",0.0,1);
+	patch[0].snowpack.water_depth = getDoubleWorldfile(&paramCnt,&paramPtr,"snowpack.water_depth","%lf",0.0,1);
+	patch[0].snowpack.T = getDoubleWorldfile(&paramCnt,&paramPtr,"snowpack.T","%lf",0.0,1);
+	patch[0].snowpack.surface_age =
+			      getDoubleWorldfile(&paramCnt,&paramPtr,"snowpack.surface_age","%lf",0.0,1);
+	patch[0].snowpack.energy_deficit =
+			      getDoubleWorldfile(&paramCnt,&paramPtr,"snowpack.energy_deficit","%lf",0.00,1);
+
 	if (command_line[0].snow_scale_flag == 1) {
-		fscanf(world_file,"%lf",&(patch[0].snow_redist_scale));
-		read_record(world_file, record);
-		}
+		patch[0].snow_redist_scale=
+			      getDoubleWorldfile(&paramCnt,&paramPtr,"snow_redist_scale","%lf",0.0,1);
+	}
 
+	patch[0].litter.cover_fraction =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"litter.cover_fraction","%lf",1.0,1);
+	patch[0].litter.rain_stored =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"litter.rain_stored","%lf",0.0,1);
 
+	patch[0].litter_cs.litr1c =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"litter_cs.litr1c","%lf",0.031,1);
+	patch[0].litter_ns.litr1n =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"litter_ns.litr1n","%lf",0.00093,1);
+	patch[0].litter_cs.litr2c =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"litter_cs.litr2c","%lf",0.0,1);
+	patch[0].litter_cs.litr3c =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"litter_cs.litr3c","%lf",0.0,1);
+	patch[0].litter_cs.litr4c =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"litter_cs.litr4c","%lf",0.0,1);
+
+	patch[0].soil_cs.soil1c =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"soil_cs.soil1c","%lf",0.0,1);
+	patch[0].soil_ns.sminn =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"soil_ns.sminn","%lf",0.0,1);
+	patch[0].soil_ns.nitrate =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"soil_ns.nitrate","%lf",0.0,1);
+	patch[0].soil_cs.soil2c =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"soil_cs.soil2c","%lf",0.0,1);
+	patch[0].soil_cs.soil3c =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"soil_cs.soil3c","%lf",0.0,1);
+	patch[0].soil_cs.soil4c =
+		      getDoubleWorldfile(&paramCnt,&paramPtr,"soil_cs.soil4c","%lf",0.0,1);
+	patch[0].num_base_stations =
+		      getIntWorldfile(&paramCnt,&paramPtr,"n_basestations","%d",0,0);
 
 	patch[0].slope = patch[0].slope * DtoR;
 	patch[0].surface_Tday = -999.9;
@@ -208,7 +228,7 @@ struct patch_object *construct_patch(
 	patch[0].streamflow_NO3 = 0.0;
 	patch[0].snowpack.height = patch[0].snowpack.water_equivalent_depth *10.0;
 	patch[0].tmp = 0.0;
-	patch[0].detention_store = 0.0;	
+	patch[0].detention_store = 0.0;
 	patch[0].soil_ns.DON = 0.0;
 	patch[0].soil_cs.DOC = 0.0;
 
@@ -276,60 +296,49 @@ struct patch_object *construct_patch(
 		patch[0].fire.understory_et = 0;
 		patch[0].fire.understory_pet = 0;
 		// here set fire.understory_et and fire.understory_pet = 0;
-		}	
+		}
+
+	/*-------------------------------------------------------------*/
+	/* initialize the beetle object NREN 2019218                   */
+	/*-------------------------------------------------------------*/
+
+	/*if (command_line[0].beetlespread_flag==1) {
+        patch[0].beetle.mort = 0.0;
+        patch[0].beetle.Tfall =0.0;
+        patch[0].beetle.Tss = 0.0; // for future couple the beetle outbreak model
+        pathc[0].beetle.Tmin = 0.0; // for future couple the beetle outbreak model
+        patch[0].beelte.Precip_wy = 0.0; // for future couple the beetle outbreak model
+        patch[0].beetle.Yattack=0.0;  // prescribed attack time from defs
+        patch[0].beetle.abc=0.0; //
+
+	} */
+
+
 	/*--------------------------------------------------------------*/
 	/*	Variables for the dynamic version are included here     */
 	/*--------------------------------------------------------------*/
-	fscanf(world_file,"%lf",&(patch[0].litter.cover_fraction));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].litter.rain_stored));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].litter_cs.litr1c));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].litter_ns.litr1n));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].litter_cs.litr2c));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].litter_cs.litr3c));
-	read_record(world_file, record); 
-	fscanf(world_file,"%lf",&(patch[0].litter_cs.litr4c));
-	read_record(world_file, record);
-	
+
 	patch[0].litter_ns.litr2n = patch[0].litter_cs.litr2c / CEL_CN;
 	patch[0].litter_ns.litr3n = patch[0].litter_cs.litr3c / CEL_CN;
 	patch[0].litter_ns.litr4n = patch[0].litter_cs.litr4c / LIG_CN;
-	
-	fscanf(world_file,"%lf",&(patch[0].soil_cs.soil1c));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].soil_ns.sminn));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].soil_ns.nitrate));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].soil_cs.soil2c));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].soil_cs.soil3c));
-	read_record(world_file, record);
-	fscanf(world_file,"%lf",&(patch[0].soil_cs.soil4c));
-	read_record(world_file, record);
-
 
 	patch[0].soil_ns.soil1n = patch[0].soil_cs.soil1c / SOIL1_CN;
 	patch[0].soil_ns.soil2n = patch[0].soil_cs.soil2c / SOIL2_CN;
 	patch[0].soil_ns.soil3n = patch[0].soil_cs.soil3c / SOIL3_CN;
 	patch[0].soil_ns.soil4n = patch[0].soil_cs.soil4c / SOIL4_CN;
-	
+
 	/*--------------------------------------------------------------*/
 	/*	initialize sinks				                                   	*/
 	/*--------------------------------------------------------------*/
-	
+
 	patch[0].litter_cs.litr1c_hr_snk = 0.0;
 	patch[0].litter_cs.litr2c_hr_snk = 0.0;
 	patch[0].litter_cs.litr4c_hr_snk = 0.0;
-	
+
 	patch[0].soil_cs.soil1c_hr_snk = 0.0;
 	patch[0].soil_cs.soil2c_hr_snk = 0.0;
 	patch[0].soil_cs.soil4c_hr_snk = 0.0;
-	
+
 	patch[0].soil_ns.nfix_src = 0.0;
 	patch[0].soil_ns.ndep_src = 0.0;
 	patch[0].soil_ns.nleached_snk = 0.0;
@@ -348,25 +357,25 @@ struct patch_object *construct_patch(
   /*   Initialize shadow litter and soil objects for this  patch. */
   /*--------------------------------------------------------------*/
  	if( (command_line[0].vegspinup_flag > 0) ) {
-    patch[0].shadow_litter_cs[0].litr1c = patch[0].litter_cs.litr1c;    
-    patch[0].shadow_litter_cs[0].litr2c = patch[0].litter_cs.litr2c;    
-    patch[0].shadow_litter_cs[0].litr3c = patch[0].litter_cs.litr3c;    
-    patch[0].shadow_litter_cs[0].litr4c = patch[0].litter_cs.litr4c;    
-    
-    patch[0].shadow_litter_ns[0].litr1n = patch[0].litter_ns.litr1n; 
-    patch[0].shadow_litter_ns[0].litr2n = patch[0].litter_ns.litr2n; 
-    patch[0].shadow_litter_ns[0].litr3n = patch[0].litter_ns.litr3n; 
-    patch[0].shadow_litter_ns[0].litr4n = patch[0].litter_ns.litr4n; 
+    patch[0].shadow_litter_cs[0].litr1c = patch[0].litter_cs.litr1c;
+    patch[0].shadow_litter_cs[0].litr2c = patch[0].litter_cs.litr2c;
+    patch[0].shadow_litter_cs[0].litr3c = patch[0].litter_cs.litr3c;
+    patch[0].shadow_litter_cs[0].litr4c = patch[0].litter_cs.litr4c;
 
-    patch[0].shadow_soil_cs[0].soil1c = patch[0].soil_cs.soil1c;    
-    patch[0].shadow_soil_cs[0].soil2c = patch[0].soil_cs.soil2c;    
-    patch[0].shadow_soil_cs[0].soil3c = patch[0].soil_cs.soil3c;    
-    patch[0].shadow_soil_cs[0].soil4c = patch[0].soil_cs.soil4c;    
-    
-    patch[0].shadow_soil_ns[0].soil1n = patch[0].soil_ns.soil1n; 
-    patch[0].shadow_soil_ns[0].soil2n = patch[0].soil_ns.soil2n; 
-    patch[0].shadow_soil_ns[0].soil3n = patch[0].soil_ns.soil3n; 
-    patch[0].shadow_soil_ns[0].soil4n = patch[0].soil_ns.soil4n; 
+    patch[0].shadow_litter_ns[0].litr1n = patch[0].litter_ns.litr1n;
+    patch[0].shadow_litter_ns[0].litr2n = patch[0].litter_ns.litr2n;
+    patch[0].shadow_litter_ns[0].litr3n = patch[0].litter_ns.litr3n;
+    patch[0].shadow_litter_ns[0].litr4n = patch[0].litter_ns.litr4n;
+
+    patch[0].shadow_soil_cs[0].soil1c = patch[0].soil_cs.soil1c;
+    patch[0].shadow_soil_cs[0].soil2c = patch[0].soil_cs.soil2c;
+    patch[0].shadow_soil_cs[0].soil3c = patch[0].soil_cs.soil3c;
+    patch[0].shadow_soil_cs[0].soil4c = patch[0].soil_cs.soil4c;
+
+    patch[0].shadow_soil_ns[0].soil1n = patch[0].soil_ns.soil1n;
+    patch[0].shadow_soil_ns[0].soil2n = patch[0].soil_ns.soil2n;
+    patch[0].shadow_soil_ns[0].soil3n = patch[0].soil_ns.soil3n;
+    patch[0].shadow_soil_ns[0].soil4n = patch[0].soil_ns.soil4n;
   }
 
 
@@ -376,9 +385,9 @@ struct patch_object *construct_patch(
 	patch[0].soil_defaults = (struct soil_default **)
 		alloc( sizeof(struct soil_default *),"defaults",
 		"construct_patch" );
-	
+
 	i = 0;
-	while (defaults[0].soil[i].ID != soil_default_object_ID) {
+	while (defaults[0].soil[i].ID != patch[0].soil_parm_ID) {
 		i++;
 		/*--------------------------------------------------------------*/
 		/*  Report an error if no match was found.  Otherwise assign    */
@@ -387,7 +396,7 @@ struct patch_object *construct_patch(
 		if ( i>= defaults[0].num_soil_default_files ){
 			fprintf(stderr,
 				"\nFATAL ERROR: in construct_patch, soil default ID %d not found for patch %d\n" ,
-				soil_default_object_ID, patch[0].ID);
+				patch[0].soil_parm_ID, patch[0].ID);
 			exit(EXIT_FAILURE);
 		}
 	} /* end-while */
@@ -397,7 +406,7 @@ struct patch_object *construct_patch(
 		alloc( sizeof(struct landuse_default *),"defaults",
 		"construct_patch" );
 	i = 0;
-	while (defaults[0].landuse[i].ID != landuse_default_object_ID) {
+	while (defaults[0].landuse[i].ID != patch[0].landuse_parm_ID) {
 		i++;
 		/*--------------------------------------------------------------*/
 		/*  Report an error if no match was found.  Otherwise assign    */
@@ -406,7 +415,7 @@ struct patch_object *construct_patch(
 		if ( i>= defaults[0].num_landuse_default_files ){
 			fprintf(stderr,
 				"\nFATAL ERROR: in construct_patch, landuse default ID %d not found for patch %d\n" ,
-				landuse_default_object_ID, patch[0].ID);
+				patch[0].landuse_parm_ID, patch[0].ID);
                         // fprintf(stderr, "\n %d ", defaults[0].landuse[i-1].ID);
 			exit(EXIT_FAILURE);
 		}
@@ -414,7 +423,7 @@ struct patch_object *construct_patch(
 	patch[0].landuse_defaults[0] = &defaults[0].landuse[i];
 
 
-	
+
 	/*--------------------------------------------------------------*/
 	/* if fire spread module is called assign fire defaults		*/
 
@@ -424,7 +433,7 @@ struct patch_object *construct_patch(
 		alloc( sizeof(struct fire_default *),"defaults",
 		"construct_patch" );
 	i = 0;
-	while (defaults[0].fire[i].ID != fire_default_object_ID) {
+	while (defaults[0].fire[i].ID != fire_parm_ID) {
 		i++;
 		/*--------------------------------------------------------------*/
 		/*  Report an error if no match was found.  Otherwise assign    */
@@ -433,7 +442,7 @@ struct patch_object *construct_patch(
 		if ( i>= defaults[0].num_fire_default_files ){
 			fprintf(stderr,
 				"\nFATAL ERROR: in construct_patch, fire default ID %d not found for patch %d\n" ,
-				fire_default_object_ID, patch[0].ID);
+				fire_parm_ID, patch[0].ID);
 			exit(EXIT_FAILURE);
 		}
 	} /* end-while */
@@ -447,7 +456,7 @@ if (command_line[0].beetlespread_flag == 1) {
 		alloc( sizeof(struct beetle_default *),"defaults",
 		"construct_patch" );
 	i = 0;
-	while (defaults[0].beetle[i].ID != beetle_default_object_ID) {
+	while (defaults[0].beetle[i].ID != beetle_defaults_object_ID) {
 		i++;
 		/*--------------------------------------------------------------*/
 		/*  Report an error if no match was found.  Otherwise assign    */
@@ -462,7 +471,6 @@ if (command_line[0].beetlespread_flag == 1) {
 	} /* end-while */
 	patch[0].beetle_defaults[0] = &defaults[0].beetle[i];
 	}
-
 
 
 
@@ -518,7 +526,7 @@ if (command_line[0].beetlespread_flag == 1) {
 	patch[0].surface_energy_profile[2].psi_air_entry = patch[0].soil_defaults[0][0].psi_air_entry;
 	patch[0].surface_energy_profile[3].psi_air_entry = patch[0].soil_defaults[0][0].psi_air_entry;
 
-	
+
 	patch[0].surface_energy_profile[1].pore_size_index = patch[0].soil_defaults[0][0].pore_size_index;
 	patch[0].surface_energy_profile[2].pore_size_index = patch[0].soil_defaults[0][0].pore_size_index;
 	patch[0].surface_energy_profile[3].pore_size_index = patch[0].soil_defaults[0][0].pore_size_index;
@@ -526,17 +534,17 @@ if (command_line[0].beetlespread_flag == 1) {
 	patch[0].surface_energy_profile[3].depth = patch[0].soil_defaults[0][0].soil_depth;
 	patch[0].litter.T = -999.0;
 	patch[0].rootzone.T = -999.0;
-		
+
 	}
 
 
 	/*--------------------------------------------------------------*/
 	/* FOR now substitute worldfile m (if > 0) in defaults			*/
 	/*--------------------------------------------------------------*/
-	patch[0].original_m = mpar;
-	if (mpar > ZERO) {
-		patch[0].m = mpar * command_line[0].sen[M];
-		patch[0].m_z = patch[0].soil_defaults[0][0].porosity_0 * mpar;
+	patch[0].original_m = patch[0].mpar;
+	if (patch[0].mpar > ZERO) {
+		patch[0].m = patch[0].mpar * command_line[0].sen[M];
+		patch[0].m_z = patch[0].soil_defaults[0][0].porosity_0 * patch[0].mpar;
 	}
 	else {
 		patch[0].m = patch[0].soil_defaults[0][0].m;
@@ -563,21 +571,16 @@ if (command_line[0].beetlespread_flag == 1) {
 	patch[0].soil_defaults[0][0].effective_soil_depth = patch[0].soil_defaults[0][0].soil_depth;
 	/*
 	patch[0].soil_defaults[0][0].effective_soil_depth = min(patch[0].soil_defaults[0][0].soil_depth,
-				6.9*patch[0].soil_defaults[0][0].m_z);	
+				6.9*patch[0].soil_defaults[0][0].m_z);
 	*/
 
 	/*--------------------------------------------------------------*/
 	/* detention store size can vary with both soil and landuse		*/
 	/*	use the maximum of the two									*/
 	/*--------------------------------------------------------------*/
-	patch[0].soil_defaults[0][0].detention_store_size = 
+	patch[0].soil_defaults[0][0].detention_store_size =
 				max(patch[0].landuse_defaults[0][0].detention_store_size,
 				patch[0].soil_defaults[0][0].detention_store_size);
-	/*--------------------------------------------------------------*/
-	/*	Read in the number of  patch base stations 					*/
-	/*--------------------------------------------------------------*/
-	fscanf(world_file,"%d",&(patch[0].num_base_stations));
-	read_record(world_file, record);
 	/*--------------------------------------------------------------*/
 	/*    Allocate a list of base stations for this patch.			*/
 	/*--------------------------------------------------------------*/
@@ -588,24 +591,41 @@ if (command_line[0].beetlespread_flag == 1) {
 	/*--------------------------------------------------------------*/
 	/*      Read each base_station ID and then point to that base_statio*/
 	/*--------------------------------------------------------------*/
-	for (i=0 ; i<patch[0].num_base_stations; i++){
+	for (i=0 ; i<patch[0].num_base_stations; i++){ //patch.num_base_stations is 1 not from the header file,but from the world file
 		fscanf(world_file,"%d",&(base_stationID));
 		read_record(world_file, record);
 		/*--------------------------------------------------------------*/
 		/*	Point to the appropriate base station in the base       	*/
 		/*              station list for this world.					*/
 		/*--------------------------------------------------------------*/
+
+		//add the extra station information for reading the beetle attack time sereies NREN 20180711
+
+		if (command_line[0].gridded_netcdf_flag==1 && num_world_extra_base_stations==1 )
+		{
+		/*patch[0].snag_sequence.seq = (struct dated_sequence2 *) alloc(300*sizeof(struct dated_sequence2), "snag_sequence", "construct_patch");
+        patch[0].redneedle_sequence.seq = (struct dated_sequence2 *) alloc(300*sizeof(struct dated_sequence2), "snag_sequence", "construct_patch"); */
+
+
+		 patch[0].base_stations[i]=assign_base_station(
+		 base_stationID,
+		 num_world_extra_base_stations,
+		 extra_base_stations);
+		}
+		else {
+
 		patch[0].base_stations[i] = assign_base_station(
 			base_stationID,
-			num_world_base_stations,
+			num_world_base_stations, //
 			world_base_stations);
+			} /* end if else */
 	} /*end for*/
 	/*--------------------------------------------------------------*/
 	/*	Read in number of canopy strata objects in this patch		*/
 	/*--------------------------------------------------------------*/
 	fscanf(world_file,"%d",&(patch[0].num_canopy_strata));
 	read_record(world_file, record);
-	
+
 	/*--------------------------------------------------------------*/
 	/*	Allocate list of pointers to stratum objects .				*/
 	/*--------------------------------------------------------------*/
@@ -613,9 +633,9 @@ if (command_line[0].beetlespread_flag == 1) {
 		alloc( patch[0].num_canopy_strata *
 		sizeof( struct canopy_strata_object *),
 		"canopy_strata","construct_patch");
- 	
+
 		patch[0].shadow_strata = ( struct canopy_strata_object ** )
-			alloc( patch[0].num_canopy_strata * 
+			alloc( patch[0].num_canopy_strata *
 			sizeof( struct canopy_strata_object *),
 			"shadow_strata","construct_patch");
 
@@ -627,7 +647,7 @@ if (command_line[0].beetlespread_flag == 1) {
 		fprintf(stderr,"FATAL ERROR: in patch_hourly\n");
 		exit(EXIT_FAILURE);
 	}
-	
+
 	/*--------------------------------------------------------------*/
 	/*      Initialize patch level rainand snow stored              */
 	/*--------------------------------------------------------------*/
@@ -638,18 +658,19 @@ if (command_line[0].beetlespread_flag == 1) {
 	patch[0].litter.gl_c = 0.0;
 	patch[0].litter.gsurf_slope = 0.0;
 	patch[0].litter.moist_coef = 0.0;
-	patch[0].litter.density = 0.0;	
+	patch[0].litter.density = 0.0;
 	patch[0].litter.gsurf_intercept = 0.0;
 	patch[0].rootzone.depth =  0.0;
 	/*--------------------------------------------------------------*/
 	/*	Construct the strata in this patch.						*/
 	/*--------------------------------------------------------------*/
 	for ( i=0 ; i<patch[0].num_canopy_strata ; i++ ){
-		patch[0].canopy_strata[i] = construct_canopy_strata(  
+		patch[0].canopy_strata[i] = construct_canopy_strata(
 			command_line,
 			world_file,
 			patch,
 			num_world_base_stations,
+			num_world_extra_base_stations,
 			world_base_stations,defaults);
 		/*--------------------------------------------------------------*/
 		/*      Aggregate rain and snow stored already for water balance*/
@@ -660,10 +681,10 @@ if (command_line[0].beetlespread_flag == 1) {
 			* patch[0].canopy_strata[i][0].cover_fraction;
 		patch[0].daily_fire_litter_turnover +=
 			patch[0].canopy_strata[i][0].defaults[0][0].epc.daily_fire_turnover
-				* patch[0].canopy_strata[i][0].cover_fraction;		
+				* patch[0].canopy_strata[i][0].cover_fraction;
 		patch[0].psi_max_veg =
 			min(patch[0].canopy_strata[i][0].defaults[0][0].epc.psi_close,
-				patch[0].psi_max_veg);	
+				patch[0].psi_max_veg);
 		patch[0].litter.gl_c +=
 			patch[0].canopy_strata[i][0].defaults[0][0].epc.gl_c
 			* patch[0].canopy_strata[i][0].cover_fraction;
@@ -679,33 +700,33 @@ if (command_line[0].beetlespread_flag == 1) {
 		patch[0].litter.density +=
 			patch[0].canopy_strata[i][0].defaults[0][0].epc.litter_density
 			* patch[0].canopy_strata[i][0].cover_fraction;
-		patch[0].rootzone.depth = max(patch[0].rootzone.depth, 
+		patch[0].rootzone.depth = max(patch[0].rootzone.depth,
 			 patch[0].canopy_strata[i][0].rootzone.depth);
 	} /*end for*/
 
 	patch[0].wilting_point = exp(-1.0*log(-1.0*100.0*patch[0].psi_max_veg/
-						patch[0].soil_defaults[0][0].psi_air_entry) 
+						patch[0].soil_defaults[0][0].psi_air_entry)
 			* patch[0].soil_defaults[0][0].pore_size_index) * patch[0].soil_defaults[0][0].porosity_0;
 
 	patch[0].precip_with_assim = 0.0;
-	
-  /*--------------------------------------------------------------*/
+
+	/*--------------------------------------------------------------*/
 	/*	Construct the shadow strata in this patch.		*/
 	/*--------------------------------------------------------------*/
 	if ( (command_line[0].vegspinup_flag > 0) ) {
-	
+
 	for ( i=0 ; i<patch[0].num_canopy_strata ; i++ ){
 		patch[0].shadow_strata[i] = construct_empty_shadow_strata(
 			command_line,
 			patch,
 			patch[0].canopy_strata[i],
-      defaults);     
- 
+      defaults);
+
 		patch[0].shadow_strata[i][0].ID = patch[0].canopy_strata[i][0].ID;
 		patch[0].shadow_strata[i][0].defaults = patch[0].canopy_strata[i][0].defaults;
 		patch[0].shadow_strata[i][0].base_stations = patch[0].canopy_strata[i][0].base_stations;
 		patch[0].shadow_strata[i][0].num_base_stations = patch[0].canopy_strata[i][0].num_base_stations;
-	
+
         } /*end for*/
 	} /*end shadow stratum if statement*/
 
@@ -728,7 +749,7 @@ if (command_line[0].beetlespread_flag == 1) {
 	patch[0].num_layers = 0;
 	sort_patch_layers(patch);
 
-		
+
 
 	/*--------------------------------------------------------------*/
 	/*	compute actual depth to water tablke			*/
@@ -742,8 +763,10 @@ if (command_line[0].beetlespread_flag == 1) {
 		0,
 		-1*patch[0].sat_deficit);
 	patch[0].preday_sat_deficit_z = patch[0].sat_deficit_z;
-	
 
+
+	if(paramPtr!=NULL)
+	  free(paramPtr);
 
 	return(patch);
 } /*end construct_patch.c*/
